@@ -1,10 +1,22 @@
 ```
-# Java/Maven build artifacts
-target/
+# Compiled and build artifacts
 *.class
+*.o
+*.obj
+*.out
+*.dll
+*.so
+*.a
 
-# Logs
+# Dependencies
+**/target/
+.gradle/
+**/.gradle/
+
+# Logs and temp files
 *.log
+*.tmp
+*.swp
 
 # Environment
 .env
@@ -14,13 +26,10 @@ target/
 # Editors
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# OS generated files
-.DS_Store
-Thumbs.db
-
-# Maven specific
-.mvn/
-mvnw
-mvnw.cmd
+# Build and distribution
+dist/
+build/
 ```
