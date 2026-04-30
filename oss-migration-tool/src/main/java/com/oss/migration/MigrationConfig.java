@@ -111,4 +111,20 @@ public class MigrationConfig {
      * 目标存储类型标识 (数据库中迁移后的存储类型)
      */
     private int targetStorageType = 2;
+    
+    // ==================== 定时任务配置 ====================
+    /**
+     * 是否启用时间窗口控制 (true: 只在 22:00-07:00 执行，false: 随时执行)
+     */
+    private boolean enableTimeWindow = true;
+    
+    /**
+     * 时间窗口开始小时 (22:00)
+     */
+    private int timeWindowStartHour = 22;
+    
+    /**
+     * 时间窗口结束小时 (07:00)
+     */
+    private int timeWindowEndHour = 7;
 }

@@ -3,6 +3,7 @@ package com.oss.migration;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.InputStream;
+import java.time.LocalTime;
 import java.util.List;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -30,6 +31,30 @@ public class OssMigrationService {
     }
     
     /**
+     * 检查当前时间是否在允许执行的时间窗口内 (22:00 - 07:00)
+     * @return 是否允许执行
+     */
+    public boolean isWithinTimeWindow() {
+        if (!config.isEnableTimeWindow()) {
+            // 如果未启用时间窗口控制，则随时可以执行
+            return true;
+        }
+        
+        LocalTime currentTime = LocalTime.now();
+        LocalTime startTime = LocalTime.of(config.getTimeWindowStartHour(), 0);
+        LocalTime endTime = LocalTime.of(config.getTimeWindowEndHour(), 0);
+        
+        // 处理跨天的情况 (22:00 - 次日 07:00)
+        if (startTime.isAfter(endTime)) {
+            // 跨天：22:00 - 23:59:59 或 00:00 - 07:00
+            return !currentTime.isBefore(startTime) || currentTime.isBefore(endTime);
+        } else {
+            // 不跨天：直接比较
+            return !currentTime.isBefore(startTime) && currentTime.isBefore(endTime);
+        }
+    }
+    
+    /**
      * 执行迁移
      */
     public void migrate() {
@@ -42,6 +67,21 @@ public class OssMigrationService {
         log.info("  - 并发线程数：{}", config.getThreadCount());
         log.info("  - 仅迁移生效文件：{}", config.isOnlyMigrateValid());
         log.info("  - 迁移后删除源文件：{}", config.isDeleteAfterMigrate());
+        log.info("  - 启用时间窗口控制：{}", config.isEnableTimeWindow());
+        if (config.isEnableTimeWindow()) {
+            log.info("  - 时间窗口：{}:00 - {}:00", 
+                config.getTimeWindowStartHour(), config.getTimeWindowEndHour());
+        }
+        
+        // 检查时间窗口
+        if (!isWithinTimeWindow()) {
+            LocalTime currentTime = LocalTime.now();
+            log.warn("当前时间 {} 不在允许的执行时间窗口内 ({}:00 - {}:00)，跳过本次迁移任务", 
+                currentTime, config.getTimeWindowStartHour(), config.getTimeWindowEndHour());
+            return;
+        }
+        
+        log.info("当前时间在允许的执行时间窗口内，继续执行迁移任务");
         
         ExecutorService executor = Executors.newFixedThreadPool(config.getThreadCount());
         CompletionService<Boolean> completionService = new ExecutorCompletionService<>(executor);
@@ -122,6 +162,7 @@ public class OssMigrationService {
     private Boolean migrateFile(FileStorage file) {
         String fileId = file.getFileId();
         String objectKey = file.getFileUrl();
+        String dbMd5 = file.getIdentifier();
         
         try {
             // 检查源文件是否存在
@@ -141,15 +182,34 @@ public class OssMigrationService {
             }
             
             // 下载文件
-            log.info("开始迁移文件：{} (fileId: {}, size: {} bytes)", 
-                objectKey, fileId, file.getFileSize());
+            log.info("开始迁移文件：{} (fileId: {}, size: {} bytes, md5: {})", 
+                objectKey, fileId, file.getFileSize(), dbMd5);
             
             try (InputStream inputStream = aliyunOssManager.downloadFile(objectKey)) {
                 // 上传到华为云
                 huaweiObsManager.uploadFile(objectKey, inputStream, file.getFileSize());
             }
             
-            // 更新数据库存储类型
+            // 验证 MD5: 获取华为云对象的 MD5 并与数据库中的 MD5 比较
+            String huaweiMd5 = huaweiObsManager.getObjectMd5(objectKey);
+            if (huaweiMd5 != null && dbMd5 != null && !dbMd5.isEmpty()) {
+                // 统一转换为小写进行比较
+                if (huaweiMd5.equalsIgnoreCase(dbMd5)) {
+                    log.info("MD5 校验通过：{} (fileId: {}), md5: {}", objectKey, fileId, huaweiMd5);
+                } else {
+                    log.error("MD5 校验失败：{} (fileId: {}), 数据库 MD5: {}, 华为云 MD5: {}", 
+                        objectKey, fileId, dbMd5, huaweiMd5);
+                    // MD5 不匹配时，不更新存储类型，返回失败
+                    failCount.incrementAndGet();
+                    return false;
+                }
+            } else {
+                log.warn("无法进行 MD5 校验：{} (fileId: {}), 数据库 MD5: {}, 华为云 MD5: {}", 
+                    objectKey, fileId, dbMd5, huaweiMd5);
+                // 如果无法获取 MD5，记录警告但仍继续
+            }
+            
+            // MD5 校验通过后，更新数据库存储类型
             databaseManager.updateStorageType(fileId, config.getTargetStorageType());
             
             // 可选：删除源文件
@@ -158,7 +218,7 @@ public class OssMigrationService {
             }
             
             successCount.incrementAndGet();
-            log.info("文件迁移成功：{} (fileId: {})", objectKey, fileId);
+            log.info("文件迁移成功并验证通过：{} (fileId: {})", objectKey, fileId);
             return true;
             
         } catch (Exception e) {

@@ -128,6 +128,11 @@ public class OssMigrationApplication {
             config.setSourceStorageType(Integer.parseInt(getProperty(props, "migration.source.type", "1")));
             config.setTargetStorageType(Integer.parseInt(getProperty(props, "migration.target.type", "2")));
             
+            // 时间窗口配置
+            config.setEnableTimeWindow(Boolean.parseBoolean(getProperty(props, "migration.time.window.enabled", "true")));
+            config.setTimeWindowStartHour(Integer.parseInt(getProperty(props, "migration.time.window.start.hour", "22")));
+            config.setTimeWindowEndHour(Integer.parseInt(getProperty(props, "migration.time.window.end.hour", "7")));
+            
         } finally {
             inputStream.close();
         }
