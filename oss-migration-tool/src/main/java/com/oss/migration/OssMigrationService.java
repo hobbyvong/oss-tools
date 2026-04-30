@@ -3,6 +3,7 @@ package com.oss.migration;
 import lombok.extern.slf4j.Slf4j;
 
 import java.io.InputStream;
+import java.sql.SQLException;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.concurrent.*;
@@ -73,11 +74,27 @@ public class OssMigrationService {
                 config.getTimeWindowStartHour(), config.getTimeWindowEndHour());
         }
         
+        // 查询待迁移文件总数（无论是否在时间窗口内都输出）
+        int totalCount;
+        try {
+            totalCount = databaseManager.countFilesToMigrate();
+        } catch (SQLException e) {
+            log.error("查询待迁移文件数量失败", e);
+            throw new RuntimeException("查询待迁移文件数量失败", e);
+        }
+        log.info("待迁移文件总数：{}", totalCount);
+        
+        if (totalCount == 0) {
+            log.info("所有文件已完成迁移，无需执行迁移任务");
+            return;
+        }
+        
         // 检查时间窗口
         if (!isWithinTimeWindow()) {
             LocalTime currentTime = LocalTime.now();
             log.warn("当前时间 {} 不在允许的执行时间窗口内 ({}:00 - {}:00)，跳过本次迁移任务", 
                 currentTime, config.getTimeWindowStartHour(), config.getTimeWindowEndHour());
+            log.info("剩余待迁移文件数：{}，将在下一个时间窗口继续迁移", totalCount);
             return;
         }
         
@@ -87,15 +104,6 @@ public class OssMigrationService {
         CompletionService<Boolean> completionService = new ExecutorCompletionService<>(executor);
         
         try {
-            // 查询总记录数
-            int totalCount = databaseManager.countFilesToMigrate();
-            log.info("待迁移文件总数：{}", totalCount);
-            
-            if (totalCount == 0) {
-                log.info("没有需要迁移的文件");
-                return;
-            }
-            
             // 分批处理
             int offset = 0;
             int batchNum = 0;
