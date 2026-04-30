@@ -76,6 +76,32 @@ public class HuaweiObsManager {
     }
     
     /**
+     * 获取华为云 OBS 对象的 MD5 值
+     * @param objectKey 对象键
+     * @return MD5 值 (16 进制字符串), 如果获取失败返回 null
+     */
+    public String getObjectMd5(String objectKey) {
+        try {
+            log.debug("获取华为云 OBS 对象 MD5: {}", objectKey);
+            var objectMetadata = obsClient.getObjectMetadata(config.getHuaweiBucketName(), objectKey);
+            if (objectMetadata != null) {
+                String etag = objectMetadata.getEtag();
+                if (etag != null && !etag.isEmpty()) {
+                    // ETag 通常包含双引号，需要去除
+                    etag = etag.replace("\"", "");
+                    log.debug("对象 {} 的 MD5 (ETag): {}", objectKey, etag);
+                    return etag;
+                }
+            }
+            log.warn("无法获取对象 {} 的 MD5 值", objectKey);
+            return null;
+        } catch (Exception e) {
+            log.error("获取对象 MD5 失败：{}, error: {}", objectKey, e.getMessage(), e);
+            return null;
+        }
+    }
+    
+    /**
      * 关闭客户端
      */
     public void close() {

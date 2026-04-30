@@ -83,6 +83,16 @@ migration.only.valid = true         # 仅迁移生效的文件 (file_status=1)
 migration.delete.after = false      # 迁移后是否删除源文件 (建议先设为 false)
 migration.source.type = 1           # 源存储类型标识
 migration.target.type = 2           # 目标存储类型标识
+
+# ==================== 时间窗口配置 ====================
+# 是否启用时间窗口控制 (true: 只在指定时间段执行，false: 随时执行)
+migration.time.window.enabled = true
+
+# 时间窗口开始小时 (24 小时制，默认 22 点)
+migration.time.window.start.hour = 22
+
+# 时间窗口结束小时 (24 小时制，默认 7 点)
+migration.time.window.end.hour = 7
 ```
 
 ### 3. 编译打包
@@ -128,13 +138,16 @@ CREATE TABLE "net_disk"."file" (
 ## 迁移流程
 
 1. **读取配置** - 从配置文件加载数据库和 OSS 配置
-2. **查询待迁移文件** - 根据 `file_status` 和 `storage_type` 筛选需要迁移的文件
-3. **批量迁移** - 并发处理文件迁移：
+2. **时间窗口检查** - 如果启用了时间窗口控制，检查当前时间是否在允许范围内 (默认 22:00-07:00)
+3. **查询待迁移文件** - 根据 `file_status` 和 `storage_type` 筛选需要迁移的文件，并输出剩余文件数量
+4. **批量迁移** - 并发处理文件迁移：
    - 从阿里云 OSS 下载文件
    - 上传到华为云 OBS
-   - 更新数据库中的 `storage_type` 字段
-4. **可选清理** - 如果配置了 `migration.delete.after=true`，删除阿里云上的源文件
-5. **输出统计** - 显示成功、失败、跳过的文件数量
+   - **获取华为云 OBS 对象的 MD5 值**
+   - **与数据库中的 `identifier` (MD5) 进行比较验证**
+   - **MD5 校验通过后，更新数据库中的 `storage_type` 字段**
+5. **可选清理** - 如果配置了 `migration.delete.after=true`，删除阿里云上的源文件
+6. **输出统计** - 显示成功、失败、跳过的文件数量
 
 ## 日志说明
 
