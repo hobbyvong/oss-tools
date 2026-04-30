@@ -5,7 +5,11 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.time.LocalTime;
 import java.util.Properties;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * OSS 迁移工具主程序
@@ -16,17 +20,22 @@ import java.util.Properties;
  * 3. 运行：java -jar target/oss-migration-tool-1.0.0-jar-with-dependencies.jar
  * 
  * 或者直接运行：java -cp src/main/java com.oss.migration.OssMigrationApplication
+ * 
+ * 定时任务说明:
+ * - 每天 22:00 自动启动迁移任务
+ * - 每个批次执行前都会检查时间窗口 (22:00-07:00)
+ * - 如果不在时间窗口内，暂停迁移，等待下次定时任务启动
  */
 @Slf4j
 public class OssMigrationApplication {
+    
+    private static MigrationConfig config;
+    private static ScheduledExecutorService scheduler;
     
     public static void main(String[] args) {
         log.info("========================================");
         log.info("   阿里云 OSS -> 华为云 OBS 数据迁移工具");
         log.info("========================================");
-        
-        MigrationConfig config = null;
-        OssMigrationService migrationService = null;
         
         try {
             // 加载配置
@@ -35,6 +44,94 @@ public class OssMigrationApplication {
             // 验证配置
             validateConfig(config);
             
+            // 启动定时任务调度器
+            startScheduler();
+            
+            // 保持主线程运行
+            log.info("定时任务调度器已启动，每天 22:00 自动执行迁移任务");
+            log.info("按 Ctrl+C 退出程序");
+            
+            // 添加关闭钩子
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                log.info("正在关闭定时任务调度器...");
+                if (scheduler != null) {
+                    scheduler.shutdown();
+                    try {
+                        if (!scheduler.awaitTermination(5, TimeUnit.SECONDS)) {
+                            scheduler.shutdownNow();
+                        }
+                    } catch (InterruptedException e) {
+                        scheduler.shutdownNow();
+                        Thread.currentThread().interrupt();
+                    }
+                }
+                log.info("程序已退出");
+            }));
+            
+        } catch (IllegalArgumentException e) {
+            log.error("配置错误：{}", e.getMessage());
+            log.error("请检查配置文件 application.properties");
+            System.exit(1);
+        } catch (Exception e) {
+            log.error("启动过程中发生严重错误", e);
+            System.exit(1);
+        }
+    }
+    
+    /**
+     * 启动定时任务调度器
+     */
+    private static void startScheduler() {
+        scheduler = Executors.newScheduledThreadPool(1);
+        
+        // 计算到下一个 22:00 的延迟时间
+        long initialDelay = calculateInitialDelay();
+        
+        // 每 24 小时执行一次（每天 22:00）
+        scheduler.scheduleAtFixedRate(
+            () -> {
+                try {
+                    log.info("========== 定时任务触发：开始执行迁移任务 ==========");
+                    executeMigration();
+                } catch (Exception e) {
+                    log.error("定时任务执行失败", e);
+                }
+            },
+            initialDelay,
+            TimeUnit.HOURS.toMillis(24),
+            TimeUnit.MILLISECONDS
+        );
+        
+        log.info("定时任务已调度，将在 {} 毫秒后首次执行（预计今天 22:00）", initialDelay);
+    }
+    
+    /**
+     * 计算到下一个 22:00 的延迟时间（毫秒）
+     */
+    private static long calculateInitialDelay() {
+        LocalTime now = LocalTime.now();
+        LocalTime scheduledTime = LocalTime.of(22, 0);
+        
+        long delay;
+        if (now.isBefore(scheduledTime)) {
+            // 当前时间在 22:00 之前，今天 22:00 执行
+            delay = java.time.Duration.between(now, scheduledTime).toMillis();
+        } else {
+            // 当前时间在 22:00 之后，明天 22:00 执行
+            delay = java.time.Duration.between(now, scheduledTime).toMillis() 
+                  + TimeUnit.DAYS.toMillis(1);
+        }
+        
+        return delay;
+    }
+    
+    /**
+     * 执行迁移任务
+     */
+    private static void executeMigration() {
+        OssMigrationService migrationService = null;
+        
+        try {
             // 创建迁移服务
             migrationService = new OssMigrationService(config);
             
@@ -43,13 +140,8 @@ public class OssMigrationApplication {
             
             log.info("迁移任务完成!");
             
-        } catch (IllegalArgumentException e) {
-            log.error("配置错误：{}", e.getMessage());
-            log.error("请检查配置文件 application.properties");
-            System.exit(1);
         } catch (Exception e) {
             log.error("迁移过程中发生严重错误", e);
-            System.exit(1);
         } finally {
             // 关闭资源
             if (migrationService != null) {
