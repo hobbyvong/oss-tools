@@ -109,6 +109,17 @@ public class OssMigrationService {
             int batchNum = 0;
             
             while (offset < totalCount) {
+                // 【关键】每个批次执行前都检查时间窗口
+                if (!isWithinTimeWindow()) {
+                    LocalTime currentTime = LocalTime.now();
+                    log.warn("当前时间 {} 不在允许的执行时间窗口内 ({}:00 - {}:00)，暂停迁移", 
+                        currentTime, config.getTimeWindowStartHour(), config.getTimeWindowEndHour());
+                    log.info("已处理进度：成功={}, 失败={}, 跳过={}, 剩余待迁移文件数：{}", 
+                        successCount.get(), failCount.get(), skipCount.get(), totalCount - offset);
+                    log.info("等待下次定时任务启动后继续迁移");
+                    break; // 退出循环，等待下次定时任务
+                }
+                
                 List<FileStorage> files = databaseManager.queryFilesToMigrate(offset, config.getBatchSize());
                 
                 if (files.isEmpty()) {
