@@ -79,7 +79,7 @@ huawei.bucket.name = your-huawei-bucket
 # ==================== 迁移配置 ====================
 migration.batch.size = 100          # 每批次处理的记录数
 migration.thread.count = 5          # 并发线程数
-migration.only.valid = true         # 仅迁移生效的文件 (file_status=1)
+migration.only.valid = true         # 仅迁移生效的文件 (fileStatus=1)
 migration.delete.after = false      # 迁移后是否删除源文件 (建议先设为 false)
 migration.source.type = 1           # 源存储类型标识
 migration.target.type = 2           # 目标存储类型标识
@@ -118,20 +118,20 @@ java -jar target/oss-migration-tool-1.0.0-jar-with-dependencies.jar /path/to/you
 
 ## 数据库表结构
 
-本工具基于以下表结构设计（根据您提供的 DDL）：
+本工具基于以下表结构设计（驼峰命名）：
 
 ```sql
 CREATE TABLE "net_disk"."file" (
-  "file_id" varchar(20) NOT NULL,
-  "create_time" varchar(25),
-  "create_user_id" varchar(32),
-  "file_size" int8,
-  "file_status" int4,           -- 文件状态 (0-失效，1-生效)
-  "file_url" varchar(500),      -- 文件在对象存储中的 key
-  "identifier" varchar(200),    -- MD5 唯一标识
-  "modify_time" varchar(25),
-  "modify_user_id" varchar(32),
-  "storage_type" int4           -- 存储类型 (1-阿里云，2-华为云)
+  "fileId" varchar(20) NOT NULL,
+  "createTime" varchar(25),
+  "createUserId" varchar(32),
+  "fileSize" int8,
+  "fileStatus" int4,           -- 文件状态 (0-失效，1-生效)
+  "fileUrl" varchar(500),      -- 文件在对象存储中的 key
+  "identifier" varchar(200),   -- MD5 唯一标识
+  "modifyTime" varchar(25),
+  "modifyUserId" varchar(32),
+  "storageType" int4           -- 存储类型 (1-阿里云，2-华为云)
 );
 ```
 
@@ -139,13 +139,13 @@ CREATE TABLE "net_disk"."file" (
 
 1. **读取配置** - 从配置文件加载数据库和 OSS 配置
 2. **时间窗口检查** - 如果启用了时间窗口控制，检查当前时间是否在允许范围内 (默认 22:00-07:00)
-3. **查询待迁移文件** - 根据 `file_status` 和 `storage_type` 筛选需要迁移的文件，并输出剩余文件数量
+3. **查询待迁移文件** - 根据 `fileStatus` 和 `storageType` 筛选需要迁移的文件，并输出剩余文件数量
 4. **批量迁移** - 并发处理文件迁移：
    - 从阿里云 OSS 下载文件
    - 上传到华为云 OBS
    - **获取华为云 OBS 对象的 MD5 值**
    - **与数据库中的 `identifier` (MD5) 进行比较验证**
-   - **MD5 校验通过后，更新数据库中的 `storage_type` 字段**
+   - **MD5 校验通过后，更新数据库中的 `storageType` 字段**
 5. **可选清理** - 如果配置了 `migration.delete.after=true`，删除阿里云上的源文件
 6. **输出统计** - 显示成功、失败、跳过的文件数量
 
@@ -189,7 +189,7 @@ A: 重新运行程序即可，会自动跳过已迁移的文件。
 A: 检查日志中的统计信息，并抽样验证华为云 OBS 中的文件。
 
 ### Q: 可以只迁移部分文件吗？
-A: 可以通过修改 `migration.only.valid` 或在数据库中临时修改 `storage_type` 来控制。
+A: 可以通过修改 `migration.only.valid` 或在数据库中临时修改 `storageType` 来控制。
 
 ### Q: 迁移速度慢怎么办？
 A: 

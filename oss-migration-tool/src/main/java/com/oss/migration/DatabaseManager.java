@@ -53,17 +53,17 @@ public class DatabaseManager {
         if ("postgresql".equalsIgnoreCase(config.getDbType()) || 
             "opengauss".equalsIgnoreCase(config.getDbType())) {
             sql = String.format(
-                "SELECT file_id, create_time, create_user_id, file_size, file_status, " +
-                "file_url, identifier, modify_time, modify_user_id, storage_type " +
-                "FROM %s.%s WHERE file_status = ? AND storage_type = ? " +
-                "ORDER BY create_time LIMIT ? OFFSET ?",
+                "SELECT fileId, createTime, createUserId, fileSize, fileStatus, " +
+                "fileUrl, identifier, modifyTime, modifyUserId, storageType " +
+                "FROM %s.%s WHERE fileStatus = ? AND storageType = ? " +
+                "ORDER BY createTime LIMIT ? OFFSET ?",
                 config.getSchemaName(), config.getTableName()
             );
         } else {
             sql = String.format(
-                "SELECT file_id, create_time, create_user_id, file_size, file_status, " +
-                "file_url, identifier, modify_time, modify_user_id, storage_type " +
-                "FROM %s WHERE file_status = ? AND storage_type = ? " +
+                "SELECT fileId, createTime, createUserId, fileSize, fileStatus, " +
+                "fileUrl, identifier, modifyTime, modifyUserId, storageType " +
+                "FROM %s WHERE fileStatus = ? AND storageType = ? " +
                 "LIMIT ? OFFSET ?",
                 config.getTableName()
             );
@@ -80,16 +80,16 @@ public class DatabaseManager {
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
                     FileStorage file = new FileStorage();
-                    file.setFileId(rs.getString("file_id"));
-                    file.setCreateTime(rs.getString("create_time"));
-                    file.setCreateUserId(rs.getString("create_user_id"));
-                    file.setFileSize(rs.getLong("file_size"));
-                    file.setFileStatus(rs.getInt("file_status"));
-                    file.setFileUrl(rs.getString("file_url"));
+                    file.setFileId(rs.getString("fileId"));
+                    file.setCreateTime(rs.getString("createTime"));
+                    file.setCreateUserId(rs.getString("createUserId"));
+                    file.setFileSize(rs.getLong("fileSize"));
+                    file.setFileStatus(rs.getInt("fileStatus"));
+                    file.setFileUrl(rs.getString("fileUrl"));
                     file.setIdentifier(rs.getString("identifier"));
-                    file.setModifyTime(rs.getString("modify_time"));
-                    file.setModifyUserId(rs.getString("modify_user_id"));
-                    file.setStorageType(rs.getInt("storage_type"));
+                    file.setModifyTime(rs.getString("modifyTime"));
+                    file.setModifyUserId(rs.getString("modifyUserId"));
+                    file.setStorageType(rs.getInt("storageType"));
                     fileList.add(file);
                 }
             }
@@ -106,12 +106,12 @@ public class DatabaseManager {
         if ("postgresql".equalsIgnoreCase(config.getDbType()) || 
             "opengauss".equalsIgnoreCase(config.getDbType())) {
             sql = String.format(
-                "SELECT COUNT(*) FROM %s.%s WHERE file_status = ? AND storage_type = ?",
+                "SELECT COUNT(*) FROM %s.%s WHERE fileStatus = ? AND storageType = ?",
                 config.getSchemaName(), config.getTableName()
             );
         } else {
             sql = String.format(
-                "SELECT COUNT(*) FROM %s WHERE file_status = ? AND storage_type = ?",
+                "SELECT COUNT(*) FROM %s WHERE fileStatus = ? AND storageType = ?",
                 config.getTableName()
             );
         }
@@ -137,7 +137,7 @@ public class DatabaseManager {
      */
     public void updateStorageType(String fileId, int newStorageType) throws SQLException {
         String sql = String.format(
-            "UPDATE %s SET storage_type = ?, modify_time = ? WHERE file_id = ?",
+            "UPDATE %s SET storageType = ?, modifyTime = ? WHERE fileId = ?",
             "postgresql".equalsIgnoreCase(config.getDbType()) || 
             "opengauss".equalsIgnoreCase(config.getDbType()) ? 
                 config.getSchemaName() + "." + config.getTableName() : 
