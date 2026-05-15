@@ -114,7 +114,7 @@ public class MigrationConfig {
     
     // ==================== 定时任务配置 ====================
     /**
-     * 是否启用时间窗口控制 (true: 只在 22:00-07:00 执行，false: 随时执行)
+     * 是否启用时间窗口控制 (true: 只在指定时间段执行，false: 随时执行)
      */
     private boolean enableTimeWindow = true;
     
@@ -127,4 +127,14 @@ public class MigrationConfig {
      * 时间窗口结束小时 (07:00)
      */
     private int timeWindowEndHour = 7;
+    
+    /**
+     * 定时任务触发时间 - 小时 (24 小时制，默认 22 点)
+     */
+    private int scheduledTaskHour = 22;
+    
+    /**
+     * 定时任务触发时间 - 分钟 (0-59，默认 0 分)
+     */
+    private int scheduledTaskMinute = 0;
 }

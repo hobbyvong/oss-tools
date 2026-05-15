@@ -22,9 +22,10 @@ import java.util.concurrent.TimeUnit;
  * 或者直接运行：java -cp src/main/java com.oss.migration.OssMigrationApplication
  * 
  * 定时任务说明:
- * - 每天 22:00 自动启动迁移任务
- * - 每个批次执行前都会检查时间窗口 (22:00-07:00)
+ * - 每天在指定时间 (默认 22:00) 自动启动迁移任务
+ * - 每个批次执行前都会检查时间窗口 (默认 22:00-07:00)
  * - 如果不在时间窗口内，暂停迁移，等待下次定时任务启动
+ * - 可通过配置文件自定义定时任务触发时间和时间窗口
  */
 @Slf4j
 public class OssMigrationApplication {
@@ -48,7 +49,15 @@ public class OssMigrationApplication {
             startScheduler();
             
             // 保持主线程运行
-            log.info("定时任务调度器已启动，每天 22:00 自动执行迁移任务");
+            log.info("定时任务调度器已启动，每天 {}:{} 自动执行迁移任务", 
+                String.format("%02d", config.getScheduledTaskHour()), 
+                String.format("%02d", config.getScheduledTaskMinute()));
+            if (config.isEnableTimeWindow()) {
+                log.info("时间窗口控制已启用：{}:00 - {}:00 (避开业务高峰期)", 
+                    config.getTimeWindowStartHour(), config.getTimeWindowEndHour());
+            } else {
+                log.info("时间窗口控制未启用：迁移任务将持续执行");
+            }
             log.info("按 Ctrl+C 退出程序");
             
             // 添加关闭钩子
@@ -106,18 +115,18 @@ public class OssMigrationApplication {
     }
     
     /**
-     * 计算到下一个 22:00 的延迟时间（毫秒）
+     * 计算到下一个定时任务时间的延迟时间（毫秒）
      */
     private static long calculateInitialDelay() {
         LocalTime now = LocalTime.now();
-        LocalTime scheduledTime = LocalTime.of(22, 0);
+        LocalTime scheduledTime = LocalTime.of(config.getScheduledTaskHour(), config.getScheduledTaskMinute());
         
         long delay;
         if (now.isBefore(scheduledTime)) {
-            // 当前时间在 22:00 之前，今天 22:00 执行
+            // 当前时间在定时时间之前，今天执行
             delay = java.time.Duration.between(now, scheduledTime).toMillis();
         } else {
-            // 当前时间在 22:00 之后，明天 22:00 执行
+            // 当前时间在定时时间之后，明天执行
             delay = java.time.Duration.between(now, scheduledTime).toMillis() 
                   + TimeUnit.DAYS.toMillis(1);
         }
@@ -224,6 +233,10 @@ public class OssMigrationApplication {
             config.setEnableTimeWindow(Boolean.parseBoolean(getProperty(props, "migration.time.window.enabled", "true")));
             config.setTimeWindowStartHour(Integer.parseInt(getProperty(props, "migration.time.window.start.hour", "22")));
             config.setTimeWindowEndHour(Integer.parseInt(getProperty(props, "migration.time.window.end.hour", "7")));
+            
+            // 定时任务触发时间配置
+            config.setScheduledTaskHour(Integer.parseInt(getProperty(props, "migration.scheduled.task.hour", "22")));
+            config.setScheduledTaskMinute(Integer.parseInt(getProperty(props, "migration.scheduled.task.minute", "0")));
             
         } finally {
             inputStream.close();
