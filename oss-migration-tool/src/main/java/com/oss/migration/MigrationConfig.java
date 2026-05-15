@@ -93,7 +93,7 @@ public class MigrationConfig {
     private int threadCount = 5;
     
     /**
-     * 仅迁移生效的文件 (file_status=1)
+     * 仅迁移生效的文件 (fileStatus=1)
      */
     private boolean onlyMigrateValid = true;
     
